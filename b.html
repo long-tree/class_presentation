@@ -246,6 +246,38 @@
         .left-zone { left: 0; background: linear-gradient(90deg, rgba(0,0,0,0.3), transparent); }
         .right-zone { right: 0; background: linear-gradient(-90deg, rgba(0,0,0,0.3), transparent); }
 
+        /* 角落小视频触发按钮与容器 */
+        .mini-video-btn {
+            position: fixed;
+            top: 12px;
+            left: 12px;
+            z-index: 200;
+            padding: 6px 10px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.25);
+            color: #fff;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.35;
+            transition: opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+        }
+        .mini-video-btn:hover { opacity: 0.9; background: rgba(255,255,255,0.15); border-color: rgba(255,255,255,0.35); }
+
+        .mini-video-frame {
+            position: fixed;
+            top: 44px;
+            left: 12px;
+            width: 700px;
+            height: 400px;
+            z-index: 180;
+            display: none;
+            border-radius: 14px;
+            overflow: hidden;
+            box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+            border: 1px solid rgba(255,255,255,0.15);
+            background: rgba(0,0,0,0.6);
+        }
     </style>
 </head>
 <body>
@@ -256,6 +288,12 @@
         <div class="blob blob-2"></div>
         <div class="blob blob-3"></div>
         <div class="blob blob-4"></div>
+    </div>
+
+    <!-- 角落小视频 -->
+    <button class="mini-video-btn" onclick="toggleMiniVideo()" aria-label="切换小视频">🎬</button>
+    <div class="mini-video-frame" id="miniVideoFrame">
+        <iframe style="width: 100%; height: 100%;" src="https://www.bilibili.com/blackboard/live/live-activity-player.html?cid=1964698147&quality=0" frameborder="0" scrolling="no" allow="autoplay; encrypted-media" allowfullscreen="true"></iframe>
     </div>
 
     <!-- 导航点击区 -->
@@ -700,6 +738,14 @@
             updateSlide(target); // 0-based
             localStorage.removeItem('cozeReturnPending');
             localStorage.removeItem('cozeReturnSlide');
+        }
+
+        // 小视频显示/隐藏
+        function toggleMiniVideo() {
+            const wrap = document.getElementById('miniVideoFrame');
+            if (!wrap) return;
+            const isOpen = wrap.style.display === 'block';
+            wrap.style.display = isOpen ? 'none' : 'block';
         }
 
     </script>
