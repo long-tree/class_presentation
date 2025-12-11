@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlowRadio Presentation</title>
+    <style>
+        :root {
+            --font-stack: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.7);
+            --glass-bg: rgba(255, 255, 255, 0.05);
+            --glass-border: rgba(255, 255, 255, 0.1);
+            --accent-glow: rgba(100, 200, 255, 0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background-color: #000;
+            color: var(--text-primary);
+            font-family: var(--font-stack);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            user-select: none; /* 防止选中文字影响演示体验 */
+        }
+
+        /* --- 动态流光背景 --- */
+        .background-fx {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .blob {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.6;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+
+        .blob-1 { width: 60vw; height: 60vw; background: #4a1c40; top: -10%; left: -10%; animation-duration: 25s; }
+        .blob-2 { width: 50vw; height: 50vw; background: #1c2e4a; bottom: -10%; right: -10%; animation-duration: 30s; }
+        .blob-3 { width: 40vw; height: 40vw; background: #2b1c4a; top: 40%; left: 40%; animation-duration: 22s; }
+        .blob-4 { width: 30vw; height: 30vw; background: #4a3b1c; top: 10%; right: 20%; animation-duration: 28s; opacity: 0.4; }
+
+        @keyframes float {
+            0% { transform: translate(0, 0) scale(1); }
+            50% { transform: translate(30px, 50px) scale(1.1); }
+            100% { transform: translate(-20px, -30px) scale(0.95); }
+        }
+
+        /* --- 幻灯片容器 --- */
+        .slide-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 100px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+            transform: scale(0.9) translateY(20px);
+        }
+
+        .slide.active {
+            opacity: 1;
+            pointer-events: auto;
+            transform: scale(1) translateY(0);
+        }
+
+        .slide.prev { transform: translateY(-50px) scale(0.95); opacity: 0; }
+        .slide.next { transform: translateY(50px) scale(0.95); opacity: 0; }
+
+        /* --- 内容排版 --- */
+        h1 {
+            font-size: 5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin-bottom: 20px;
+            background: linear-gradient(135deg, #fff 0%, #ddd 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        h2 {
+            font-size: 3rem;
+            font-weight: 600;
+            margin-bottom: 50px;
+            letter-spacing: -0.01em;
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            color: #fff;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        p {
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            font-weight: 400;
+        }
+
+        strong { color: #fff; font-weight: 600; }
+
+        .tag {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.1);
+            font-size: 0.8rem;
+            margin-bottom: 10px;
+            border: 1px solid rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+        }
+
+        /* --- 布局系统 --- */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            width: 100%;
+            max-width: 1400px;
+            align-items: center;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 40px;
+            width: 100%;
+            max-width: 1400px;
+        }
+
+        /* --- 卡片样式 (Glassmorphism) --- */
+        .glass-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            backdrop-filter: blur(20px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+            height: 100%;
+        }
+
+        .glass-card:hover {
+            transform: translateY(-5px);
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* --- 图片占位符 --- */
+        .img-box {
+            width: 100%;
+            height: 400px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%);
+            border-radius: 24px;
+            border: 1px dashed rgba(255,255,255,0.2);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+            box-shadow: inset 0 0 50px rgba(0,0,0,0.5);
+        }
+        
+ 
+
+        .icon-xl { font-size: 4rem; margin-bottom: 15px; opacity: 0.8; }
+
+        /* --- 动画延迟 (Stagger) --- */
+        .slide.active .stagger-1 { animation: fadeUp 0.8s 0.1s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+        .slide.active .stagger-2 { animation: fadeUp 0.8s 0.2s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+        .slide.active .stagger-3 { animation: fadeUp 0.8s 0.3s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+
+        @keyframes fadeUp {
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* --- 进度条 --- */
+        .progress-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 8px;
+            z-index: 100;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .dot.active {
+            background: #fff;
+            transform: scale(1.2);
+        }
+
+        /* 左右点击区域提示 */
+        .nav-zone {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            width: 15%;
+            z-index: 50;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 2rem;
+            color: rgba(255,255,255,0.1);
+        }
+        .nav-zone:hover { opacity: 1; }
+        .left-zone { left: 0; background: linear-gradient(90deg, rgba(0,0,0,0.3), transparent); }
+        .right-zone { right: 0; background: linear-gradient(-90deg, rgba(0,0,0,0.3), transparent); }
+
+    </style>
+</head>
+<body>
+
+    <!-- 动态背景 -->
+    <div class="background-fx">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+        <div class="blob blob-4"></div>
+    </div>
+
+    <!-- 导航点击区 -->
+    <div class="nav-zone left-zone" onclick="prevSlide()">‹</div>
+    <div class="nav-zone right-zone" onclick="nextSlide()">›</div>
+
+    <div class="slide-container" id="slideContainer">
+
+        <!-- Page 1: 封面 -->
+        <div class="slide active">
+            <div class="stagger-1">
+                <div class="img-box" style="width:180px; height:180px; border-radius:40px; margin-bottom:40px; border:none; background: rgba(255,255,255,0.1);">
+                 <div class="img-box">
+<div class="img-box">
+  <img src="logo.png" alt="描述"
+       style="width:100%; height:100%; object-fit:fill;">
+</div>
+
+</div>
+
+                 
+                </div>
+            </div>
+            <h1 class="stagger-2">FlowRadio</h1>
+            <p class="stagger-3" style="font-size: 1.8rem;">你的 AI 私人电台</p>
+            <p class="stagger-3" style="margin-top: 20px; color: var(--text-secondary); opacity: 0.6;">Presentation</p>
+        </div>
+
+        <!-- Page 2: 技术选型背景 -->
+        <div class="slide">
+            <h2 class="stagger-1">技术演进：从 PyQt 到 Electron</h2>
+            <div class="grid-2">
+                <div class="text-col stagger-2">
+                    <p style="margin-bottom: 20px;">初期使用 PyQt 开发，但难以满足日益复杂的视觉和交互需求。</p>
+                    <div class="glass-card">
+                        <h3>为何选择 Electron?</h3>
+                        <ul style="list-style: none; margin-top: 15px;">
+                            <li style="margin-bottom:10px;">✅ <strong>生态成熟：</strong>无缝接入 Node.js 与 Web 前端生态。</li>
+                            <li style="margin-bottom:10px;">✅ <strong>视觉表现：</strong>原生支持 Three.js 与 Pixi.js，实现炫酷 3D 效果。</li>
+                            <li>✅ <strong>桌面能力：</strong>跨平台打包，轻松调用截图、通知等系统级 API。</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="img-box stagger-3">
+                    <div class="img-box">
+  <img src="elec.png" alt="描述"
+       style="width:100%; height:100%; object-fit:fill;">
+</div>
+                   
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 3: 模块化设计 -->
+        <div class="slide">
+            <h2 class="stagger-1">工程实践：模块化设计</h2>
+            <div class="grid-3 stagger-2">
+                <div class="glass-card">
+                    <span class="tag">Collaboration</span>
+                    <h3>团队协作</h3>
+                    <p>基于 GitHub 工作流。每人负责独立模块（B站爬虫、音频可视化、Live2D），极大降低冲突。</p>
+                </div>
+                <div class="glass-card">
+                    <span class="tag">Language</span>
+                    <h3>多语言融合</h3>
+                    <p><strong>Go & Python:</strong> 处理高并发后端与数据抓取。</p>
+                    <p><strong>TS & JS:</strong> 构建流畅的前端交互体验。</p>
+                </div>
+                <div class="glass-card">
+                    <span class="tag">Testing</span>
+                    <h3>封装与测试</h3>
+                    <p>模块高度封装，接口文档清晰。支持对单一模块进行“黑盒测试”，拒绝大海捞针。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 4: 可扩展性 -->
+        <div class="slide">
+            <h2 class="stagger-1">可扩展性：从私人到公共</h2>
+            <div class="grid-2">
+                <div class="img-box stagger-2">
+              
+                    <div class="img-box">
+  <img src="zhibo.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+               
+                </div>
+                <div class="stagger-3">
+                    <div class="glass-card">
+                        <h3>核心架构的弹性</h3>
+                        <p style="margin-bottom: 20px;">最初版本仅设计为服务个人用户的“私人电台”。</p>
+                        <p>得益于优秀的模块化解耦，在引入 <strong>B站直播监测系统</strong> 后，项目迅速从单机版进化为适应复杂直播间环境的互动系统，无需重构核心逻辑。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 5: AI 核心 - 记忆 -->
+        <div class="slide">
+            <h2 class="stagger-1">AI 核心：记忆模块 (MemOS)</h2>
+            <p class="stagger-2" style="margin-bottom: 40px; max-width: 800px; text-align: center;">接入 MemOs 记忆库，解决 LLM 上下文限制，赋予 AI 真实的人格连续性。</p>
+            <div class="grid-3 stagger-3">
+                <div class="glass-card">
+                    <h3>1. 冷启动 (Cold Start)</h3>
+                    <p>通过人工引导，预置主播的身份背景、情感基调及关键历史事件。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>2. 自主进化</h3>
+                    <p>主播在闲聊中通过自主对话，不断丰富和修正记忆库。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>3. 实时沉淀</h3>
+                    <p>直播间内与用户的所有互动（SC、弹幕）都会被记录，成为未来对话的养分。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 6: LLM 工作流 - 话题系统 -->
+        <div class="slide">
+            <h2 class="stagger-1">LLM 工作流：话题引擎</h2>
+            <div class="grid-2">
+                <div class="stagger-2">
+                    <div class="glass-card">
+                        <h3>FIFO 话题队列</h3>
+                        <p>弹幕处理结果自动存入先进先出 (FIFO) 数据库。</p>
+                    </div>
+                    <div class="glass-card" style="margin-top: 20px;">
+                        <h3>智能触发</h3>
+                        <p>主播空闲时，自动从数据库或预置的高质量话题库中提取话题，开启双人对话模式，拒绝冷场。</p>
+                    </div>
+                </div>
+                <div class="img-box stagger-3">
+                  <div class="img-box">
+  <img src="话题增强.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 7: LLM 工作流 - 意图识别 -->
+        <div class="slide">
+            <h2 class="stagger-1">LLM 工作流：意图分发</h2>
+            <div class="grid-2">
+                <div class="img-box stagger-2">
+               <div class="img-box">
+  <img src="输入路由.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+                </div>
+                <div class="text-col stagger-3">
+                    <h3>Doubao-flash 模型</h3>
+                    <p style="margin-bottom: 20px;">作为第一层网关，快速判断用户意图：</p>
+                    <div class="glass-card" style="margin-bottom: 15px; border-left: 4px solid #a18cd1;">
+                        <strong>🎵 音乐指令</strong>
+                        <p style="font-size: 0.9rem;">-> 转发给 DJ LLM (Lyria 参数控制)</p>
+                    </div>
+                    <div class="glass-card" style="border-left: 4px solid #fbc2eb;">
+                        <strong>🗣️ 主播互动</strong>
+                        <p style="font-size: 0.9rem;">-> 转发给深度思考模型 (话题生成)</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 8: AI 音乐生成 -->
+        <div class="slide">
+            <h2 class="stagger-1">Lyria 音乐生成引擎</h2>
+            <div class="grid-3 stagger-2">
+                <div class="glass-card">
+                    <h3>🎧 DJ LLM</h3>
+                    <p>专门微调的模型，负责将自然语言指令（如“来点悲伤的爵士”）转化为具体参数。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>🎛️ 实时参数</h3>
+                    <p>Lyria 引擎根据指令实时调整 BPM、调式、乐器编排，生成独一无二的背景音。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>⚡ 秒级响应</h3>
+                    <p>Doubao-flash 模型同步向用户发送确认回复，实现“边聊边听”的流畅体验。</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 9: UI 设计 - 仿直播间 -->
+        <div class="slide">
+            <h2 class="stagger-1">UI 设计：沉浸式拟真</h2>
+            <div class="grid-2">
+                <div class="text-col stagger-2">
+                    <div class="glass-card">
+                        <h3>SuperChat 包装</h3>
+                        <p>用户发给 AI 的提示词被视觉化包装为 B站直播间的 SuperChat 卡片，不仅美观，更增强了互动的仪式感。</p>
+                    </div>
+                    <div class="glass-card" style="margin-top: 20px;">
+                        <h3>HTML/CSS 布局</h3>
+                        <p>利用 Web 技术栈的优势，快速实现复杂的布局和动效，还原真实的直播界面。</p>
+                    </div>
+                </div>
+                <div class="img-box stagger-3">
+                  <div class="img-box">
+  <img src="sc.jpg" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 10: 视觉技术 - Live2D -->
+        <div class="slide">
+            <h2 class="stagger-1">视觉技术：Live2D 智能化</h2>
+            <div class="grid-2">
+                <div class="img-box stagger-2">
+                <div class="img-box">
+  <img src="live2d.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+                </div>
+                <div class="text-col stagger-3">
+                    <div class="glass-card">
+                        <h3>LLM 驱动演绎</h3>
+                        <p>大模型不仅生成文本，还输出情感标签，控制人物做出开心、惊讶、害羞等表情动作。</p>
+                    </div>
+                    <div class="glass-card" style="margin-top: 20px;">
+                        <h3>FFT 唇形同步</h3>
+                        <p>通过对音频进行 FFT (快速傅里叶变换) 分析，实时计算嘴型开合度，实现高精度的口型对齐。</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 11: 视觉技术 - 3D 背景 -->
+        <div class="slide">
+            <h2 class="stagger-1">视觉技术：Three.js 律动空间</h2>
+            <div class="stagger-2" style="width: 100%; max-width: 1000px;">
+                <div class="glass-card">
+                    <div style="display: flex; gap: 40px; align-items: center;">
+                        <div style="flex: 1;">
+                            <h3>俄罗斯方块 3D 矩阵</h3>
+                            <p>背景不是视频，而是实时渲染的 3D 场景。</p>
+                            <ul style="margin-top: 15px; margin-left: 20px;">
+                                <li><strong>BPM 光流：</strong>光影流动的速度随音乐节奏自动呼吸。</li>
+                                <li><strong>Temperature 色温：</strong>音乐情绪越激昂，色温越暖；越忧郁，色温越冷。</li>
+                                <li><strong>自定义动画：</strong>支持播放像素级自定义动画。</li>
+                            </ul>
+                        </div>
+                        <div class="img-box" style="width: 300px; height: 200px; flex-shrink: 0;">
+                         <div class="img-box">
+  <img src="tetris.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 12: 直播生态 -->
+        <div class="slide">
+            <h2 class="stagger-1">直播生态：全量监测</h2>
+            <div class="grid-3 stagger-2">
+                <div class="glass-card">
+                    <h3>📊 权重数据库</h3>
+                    <p>实时分析进场、礼物、SC 数量。根据互动频率和贡献度建立观众权重模型。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>🧠 弹幕摘要 LLM</h3>
+                    <p>高权重用户的弹幕不会被淹没，而是送入独立的 LLM 进行摘要总结。</p>
+                </div>
+                <div class="glass-card">
+                    <h3>📢 主播反馈</h3>
+                    <p>摘要后的关键信息实时推送给 AI 主播，确保“大哥”和活跃观众得到及时回应。</p>
+                </div>
+            </div>
+            <div class="img-box stagger-3" style="margin-top: 40px; height: 250px;">
+             <div class="img-box">
+  <img src="panel.png" alt="描述"
+       style="width:100%; height:100%; object-fit:cover; object-position:center;">
+</div>
+
+            </div>
+        </div>
+
+        <!-- Page 13: 结语 -->
+        <div class="slide">
+            <div class="stagger-1" style="margin-bottom: 30px;">
+                <div class="icon-xl" style="font-size: 5rem;">🚀</div>
+            </div>
+            <h1 class="stagger-2" style="font-size: 4rem;">Thank You</h1>
+            <p class="stagger-3" style="font-size: 1.5rem; margin-top: 20px;">FlowRadio - Redefining Personal Radio</p>
+            
+            <div class="grid-2 stagger-3" style="margin-top: 60px; width: 600px; grid-template-columns: 1fr; justify-items: center;">
+                <div class="glass-card" style="text-align: center; padding: 20px;">
+                    <a href="https://github.com/admmmmm/FlowRadio" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; justify-content: center; width: 180px; height: 90px; margin: 0 auto 15px; background: #fff; border-radius: 12px;">
+                        <img src="https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png" alt="GitHub Logo" style="height: 64px; width: auto;">
+                    </a>
+                    <p style="margin: 0;"><a href="https://github.com/admmmmm/FlowRadio" target="_blank" rel="noopener" style="color: #fff; text-decoration: none;">github.com/admmmmm/FlowRadio</a></p>
+                </div>
+                <!-- <div class="glass-card" style="text-align: center; padding: 20px;">
+                    <div style="width: 100px; height: 100px; background: #fff; margin: 0 auto 15px; border-radius: 10px;"></div>
+                    <p>Demo Video</p> -->
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 底部进度指示器 -->
+    <div class="progress-container" id="progressContainer"></div>
+
+    <script>
+        const slides = document.querySelectorAll('.slide');
+        const progressContainer = document.getElementById('progressContainer');
+        let currentSlide = 0;
+        let isAnimating = false;
+
+        // 初始化进度点
+        slides.forEach((_, index) => {
+            const dot = document.createElement('div');
+            dot.className = `dot ${index === 0 ? 'active' : ''}`;
+            progressContainer.appendChild(dot);
+        });
+
+        const dots = document.querySelectorAll('.dot');
+
+        function updateSlide(newIndex) {
+            if (isAnimating || newIndex < 0 || newIndex >= slides.length) return;
+            isAnimating = true;
+
+            const direction = newIndex > currentSlide ? 'next' : 'prev';
+            const currentEl = slides[currentSlide];
+            const nextEl = slides[newIndex];
+
+            // 更新 Dots
+            dots[currentSlide].classList.remove('active');
+            dots[newIndex].classList.add('active');
+
+            // 简单的淡入淡出逻辑，配合CSS transform
+            currentEl.classList.remove('active');
+            
+            // 为了让动画重新触发 (stagger effect)，我们需要重置 animation
+            const animatedElements = nextEl.querySelectorAll('.stagger-1, .stagger-2, .stagger-3');
+            animatedElements.forEach(el => {
+                el.style.animation = 'none';
+                el.offsetHeight; /* trigger reflow */
+                el.style.animation = null; 
+            });
+
+            nextEl.classList.add('active');
+
+            currentSlide = newIndex;
+            
+            setTimeout(() => {
+                isAnimating = false;
+            }, 800); // 对应 CSS transition 时间
+        }
+
+        function nextSlide() { updateSlide(currentSlide + 1); }
+        function prevSlide() { updateSlide(currentSlide - 1); }
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (['ArrowRight', 'ArrowDown', ' ', 'Enter'].includes(e.key)) {
+                nextSlide();
+            } else if (['ArrowLeft', 'ArrowUp'].includes(e.key)) {
+                prevSlide();
+            }
+        });
+
+        // 滚轮控制 (防抖)
+        let wheelTimeout;
+        document.addEventListener('wheel', (e) => {
+            clearTimeout(wheelTimeout);
+            wheelTimeout = setTimeout(() => {
+                if (e.deltaY > 0) nextSlide();
+                else if (e.deltaY < 0) prevSlide();
+            }, 100);
+        });
+
+    </script>
+</body>
+</html>
