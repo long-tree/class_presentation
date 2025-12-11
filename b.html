@@ -373,6 +373,17 @@
                     <p>直播间内与用户的所有互动（SC、弹幕）都会被记录，成为未来对话的养分。</p>
                 </div>
             </div>
+            <div class="glass-card stagger-3" style="margin-top: 30px; width: min(90%, 920px); align-self: center; text-align: center;">
+                <h3 style="margin-bottom: 12px;">AI工作流 演示</h3>
+                <p style="margin-bottom: 16px;">点击内嵌打开或新标签跳转，演示完关闭即可回到本页。</p>
+                <div style="display: flex; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                    <button onclick="toggleCozeEmbed()" style="padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); color: #fff; cursor: pointer;">内嵌/收起 </button>
+                    <button type="button" onclick="openCozeTab()" style="padding: 10px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.08); color: #fff; cursor: pointer;">新标签打开</button>
+                </div>
+                <div id="cozeEmbed" style="margin: 16px auto 0; display: none; height: 480px; width: min(100%, 860px); border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; overflow: hidden; background: rgba(0,0,0,0.4);">
+                    <iframe src="coze.html" style="width: 100%; height: 100%; border: 0; background: #111;"></iframe>
+                </div>
+            </div>
         </div>
 
         <!-- Page 6: LLM 工作流 - 话题系统 -->
@@ -640,6 +651,56 @@
                 else if (e.deltaY < 0) prevSlide();
             }, 100);
         });
+
+        // 初始定位：优先 URL 参数 ?slide=，其次本地存储 cozeReturnSlide
+        (function restoreInitialSlide() {
+            const params = new URLSearchParams(window.location.search);
+            const fromParam = parseInt(params.get('slide'), 10);
+            const pending = localStorage.getItem('cozeReturnPending') === '1';
+            const stored = parseInt(localStorage.getItem('cozeReturnSlide'), 10);
+            if (Number.isFinite(fromParam) && fromParam >= 0) {
+                updateSlide(fromParam);
+            } else if (pending && Number.isFinite(stored) && stored >= 0) {
+                updateSlide(stored);
+                localStorage.removeItem('cozeReturnPending');
+                localStorage.removeItem('cozeReturnSlide');
+            } else {
+                updateSlide(0); // 首页
+            }
+        })();
+
+        function openCozeTab() {
+            localStorage.setItem('cozeReturnSlide', currentSlide);
+            localStorage.setItem('cozeReturnPending', '1');
+            const win = window.open('coze.html', '_blank');
+            if (win && typeof win.focus === 'function') {
+                win.focus();
+            }
+        }
+
+        function toggleCozeEmbed() {
+            const embed = document.getElementById('cozeEmbed');
+            if (!embed) return;
+            const isOpen = embed.style.display === 'block';
+            if (!isOpen) {
+                localStorage.setItem('cozeReturnSlide', currentSlide);
+                localStorage.setItem('cozeReturnPending', '1');
+            }
+            embed.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // 从 Coze 内嵌退出时：收起 iframe 并回到“AI 核心：记忆”页
+        function exitFromCoze(targetIndex) {
+            const stored = parseInt(localStorage.getItem('cozeReturnSlide'), 10);
+            const target = Number.isFinite(parseInt(targetIndex, 10))
+                ? parseInt(targetIndex, 10)
+                : (Number.isFinite(stored) ? stored : 4);
+            const embed = document.getElementById('cozeEmbed');
+            if (embed) embed.style.display = 'none';
+            updateSlide(target); // 0-based
+            localStorage.removeItem('cozeReturnPending');
+            localStorage.removeItem('cozeReturnSlide');
+        }
 
     </script>
 </body>

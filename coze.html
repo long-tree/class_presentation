@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FlowAudio AI 流程架构</title>
+    <style>
+        :root {
+            --font-stack: "PingFang SC", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, sans-serif;
+            --text-primary: #ffffff;
+            --text-secondary: rgba(255, 255, 255, 0.65);
+            --node-bg: rgba(30, 30, 35, 0.8);
+            --node-border: rgba(255, 255, 255, 0.15);
+            --line-color: rgba(255, 255, 255, 0.2);
+            --flow-color: #a18cd1; /* 动态流光颜色 */
+            --bg-gradient: radial-gradient(circle at 50% 50%, #151525 0%, #050505 80%);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            font-family: var(--font-stack);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* --- 舞台容器 (核心修复：固定比例确保连线不错位) --- */
+        .stage-wrapper {
+            width: 1200px;
+            height: 700px;
+            position: relative;
+            /* 自适应缩放 */
+            transform-origin: center center;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .slide {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            display: none; /* 彻底隐藏非活动幻灯片 */
+        }
+
+        .slide.active {
+            opacity: 1;
+            display: block;
+            pointer-events: auto;
+        }
+
+        /* --- 标题区域 --- */
+        .header {
+            position: absolute;
+            top: 40px;
+            left: 50px;
+            z-index: 10;
+        }
+        .header h2 { font-size: 2.2rem; margin-bottom: 8px; font-weight: 600; text-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .header p { font-size: 1rem; color: var(--text-secondary); }
+
+        /* --- 节点样式 --- */
+        .node {
+            position: absolute;
+            width: 180px;
+            height: 90px;
+            background: var(--node-bg);
+            border: 1px solid var(--node-border);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            z-index: 2;
+            transition: transform 0.3s;
+        }
+        
+        .node:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.4); }
+        
+        .node-icon { font-size: 1.8rem; margin-bottom: 5px; }
+        .node-title { font-size: 1rem; font-weight: bold; color: #fff; }
+        .node-desc { font-size: 0.8rem; color: var(--text-secondary); margin-top: 2px; }
+
+        /* 特殊节点配色 */
+        .node.start { border-color: rgba(100, 255, 120, 0.4); box-shadow: 0 0 20px rgba(100, 255, 120, 0.1); }
+        .node.ai { border-color: rgba(161, 140, 209, 0.5); }
+        .node.db { border-color: rgba(255, 180, 100, 0.4); }
+        .node.output { border-color: rgba(100, 200, 255, 0.4); }
+
+        /* --- SVG 连线层 --- */
+        .connections {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        path {
+            fill: none;
+            stroke: var(--line-color);
+            stroke-width: 2;
+        }
+
+        /* 动态流光线 */
+        path.active-flow {
+            stroke: var(--flow-color);
+            stroke-dasharray: 10 10;
+            stroke-opacity: 0.8;
+            animation: flowAnimation 2s linear infinite;
+        }
+
+        @keyframes flowAnimation {
+            from { stroke-dashoffset: 40; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* --- 导航按钮 --- */
+        .nav-controls {
+            position: fixed;
+            bottom: 30px;
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+        .btn {
+            padding: 10px 24px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: white;
+            border-radius: 30px;
+            cursor: pointer;
+            backdrop-filter: blur(5px);
+            transition: all 0.2s;
+        }
+        .btn:hover { background: rgba(255,255,255,0.25); transform: scale(1.05); }
+
+    </style>
+</head>
+<body>
+
+    <!-- 舞台容器：用于锁定 SVG 坐标 -->
+    <div class="stage-wrapper" id="stage">
+
+        <!-- ================= PAGE 1: 核心路由总览 ================= -->
+        <div class="slide active" id="slide1">
+            <div class="header">
+                <h2>核心流程总览</h2>
+                <p>用户意图识别与分发路由 (Router)</p>
+            </div>
+
+            <!-- Nodes (Coordinates Manually Locked) -->
+            <!-- Col 1: Start -->
+            <div class="node start" style="left: 100px; top: 305px;">
+                <span class="node-icon">🎤</span>
+                <span class="node-title">用户输入</span>
+                <span class="node-desc">语音 / 文本</span>
+            </div>
+
+            <!-- Col 2: Router -->
+            <div class="node ai" style="left: 400px; top: 305px;">
+                <span class="node-icon">🔀</span>
+                <span class="node-title">意图识别网关</span>
+                <span class="node-desc">Doubao-flash</span>
+            </div>
+
+            <!-- Col 3: Branches -->
+            <!-- Top: Music -->
+            <div class="node" style="left: 800px; top: 120px;">
+                <span class="node-icon">🎵</span>
+                <span class="node-title">DJ 音乐代理</span>
+                <span class="node-desc">生成音乐参数</span>
+            </div>
+            <!-- Mid: Fast -->
+            <div class="node" style="left: 800px; top: 305px;">
+                <span class="node-icon">⚡</span>
+                <span class="node-title">快速回复</span>
+                <span class="node-desc">闲聊短响应</span>
+            </div>
+            <!-- Bot: Loop -->
+            <div class="node" style="left: 800px; top: 490px;">
+                <span class="node-icon">🔄</span>
+                <span class="node-title">双主播循环</span>
+                <span class="node-desc">深度话题互动</span>
+            </div>
+
+            <!-- Lines -->
+            <svg class="connections">
+                <!-- Start -> Router -->
+                <path class="active-flow" d="M 280 350 L 400 350" />
+                
+                <!-- Router -> Top -->
+                <path class="active-flow" d="M 580 350 C 650 350, 650 165, 800 165" />
+                
+                <!-- Router -> Mid -->
+                <path class="active-flow" d="M 580 350 L 800 350" />
+                
+                <!-- Router -> Bot -->
+                <path class="active-flow" d="M 580 350 C 650 350, 650 535, 800 535" />
+            </svg>
+        </div>
+
+        <!-- ================= PAGE 2: 音乐生成链路 ================= -->
+        <div class="slide" id="slide2">
+            <div class="header">
+                <h2>AI 音乐生成链路</h2>
+                <p>从自然语言到 Lyria 音乐参数</p>
+            </div>
+
+            <div class="node ai" style="left: 100px; top: 300px;">
+                <span class="node-icon">🎧</span>
+                <span class="node-title">DJ 大模型</span>
+                <span class="node-desc">指令微调 (SFT)</span>
+            </div>
+
+            <div class="node" style="left: 360px; top: 300px;">
+                <span class="node-icon">📄</span>
+                <span class="node-title">JSON 序列化</span>
+                <span class="node-desc">格式校验</span>
+            </div>
+
+            <div class="node db" style="left: 620px; top: 300px;">
+                <span class="node-icon">🎼</span>
+                <span class="node-title">参数映射</span>
+                <span class="node-desc">BPM / 调式 / 情感</span>
+            </div>
+
+            <div class="node output" style="left: 880px; top: 300px;">
+                <span class="node-icon">🎹</span>
+                <span class="node-title">Lyria 引擎</span>
+                <span class="node-desc">音频流输出</span>
+            </div>
+
+            <svg class="connections">
+                <path class="active-flow" d="M 280 345 L 360 345" />
+                <path class="active-flow" d="M 540 345 L 620 345" />
+                <path class="active-flow" d="M 800 345 L 880 345" />
+            </svg>
+        </div>
+
+        <!-- ================= PAGE 3: 记忆与话题 (RAG) ================= -->
+        <div class="slide" id="slide3">
+            <div class="header">
+                <h2>话题增强与记忆 (RAG)</h2>
+                <p>SQL 数据库 + MemOS 向量检索</p>
+            </div>
+
+            <!-- Top Input -->
+            <div class="node db" style="left: 150px; top: 180px;">
+                <span class="node-icon">🗃️</span>
+                <span class="node-title">SQL 话题库</span>
+                <span class="node-desc">预置 / 弹幕话题</span>
+            </div>
+
+            <!-- Bot Input -->
+            <div class="node db" style="left: 150px; top: 420px;">
+                <span class="node-icon">🧠</span>
+                <span class="node-title">MemOS 记忆库</span>
+                <span class="node-desc">向量历史检索</span>
+            </div>
+
+            <!-- Merge -->
+            <div class="node" style="left: 450px; top: 300px;">
+                <span class="node-icon">📦</span>
+                <span class="node-title">变量聚合</span>
+                <span class="node-desc">上下文组装</span>
+            </div>
+
+            <!-- Thinking -->
+            <div class="node ai" style="left: 710px; top: 300px;">
+                <span class="node-icon">💭</span>
+                <span class="node-title">深度思考模型</span>
+                <span class="node-desc">Baobab Core</span>
+            </div>
+
+            <!-- Update -->
+            <div class="node output" style="left: 970px; top: 300px;">
+                <span class="node-icon">💾</span>
+                <span class="node-title">记忆写入</span>
+                <span class="node-desc">更新向量库</span>
+            </div>
+
+            <svg class="connections">
+                <!-- Top to Merge -->
+                <path class="active-flow" d="M 330 225 C 380 225, 380 345, 450 345" />
+                <!-- Bot to Merge -->
+                <path class="active-flow" d="M 330 465 C 380 465, 380 345, 450 345" />
+                
+                <!-- Merge to Think -->
+                <path class="active-flow" d="M 630 345 L 710 345" />
+                
+                <!-- Think to Update -->
+                <path class="active-flow" d="M 890 345 L 970 345" />
+            </svg>
+        </div>
+
+        <!-- ================= PAGE 4: 双女主播循环 ================= -->
+        <div class="slide" id="slide4">
+            <div class="header">
+                <h2>双女主播互动循环</h2>
+                <p>Baobab & Acacia 交互体系</p>
+            </div>
+
+            <!-- Left: Baobab -->
+            <div class="node ai" style="left: 150px; top: 250px; border-color: #a18cd1;">
+                <span class="node-icon">👩🏻</span>
+                <span class="node-title">Baobab</span>
+                <span class="node-desc"></span>
+            </div>
+
+            <!-- Middle: Logic -->
+            <div class="node" style="left: 510px; top: 250px;">
+                <span class="node-icon">🔄</span>
+                <span class="node-title">循环控制器</span>
+                <span class="node-desc">轮次控制 / 判断</span>
+            </div>
+
+            <!-- Right: Acacia -->
+            <div class="node ai" style="left: 870px; top: 250px; border-color: #fbc2eb;">
+                <span class="node-icon">👩🏼</span>
+                <span class="node-title">Acacia</span>
+                <span class="node-desc"></span>
+            </div>
+
+            <!-- TTS Outputs -->
+            <div class="node output" style="left: 330px; top: 500px; width: 140px; height: 70px;">
+                <span class="node-icon">🔊</span>
+                <span class="node-title">语音合成</span>
+            </div>
+            
+            <div class="node output" style="left: 730px; top: 500px; width: 140px; height: 70px;">
+                <span class="node-icon">🔊</span>
+                <span class="node-title">语音合成</span>
+            </div>
+
+            <svg class="connections">
+                <!-- Baobab to Loop -->
+                <path class="active-flow" d="M 330 295 L 510 295" />
+                
+                <!-- Loop to Acacia -->
+                <path class="active-flow" d="M 690 295 L 870 295" />
+                
+                <!-- Acacia back to Loop (Curved Top) -->
+                <path class="" d="M 960 250 C 960 100, 240 100, 240 250" style="stroke-dasharray: 8; stroke-opacity: 0.3;" />
+                
+                <!-- TTS Connections -->
+                <path class="" d="M 240 340 L 400 500" />
+                <path class="" d="M 960 340 L 800 500" />
+            </svg>
+        </div>
+
+    </div>
+
+    <!-- 控制按钮 -->
+    <div class="nav-controls">
+        <button class="btn" onclick="showSlide(1)">1. 核心路由</button>
+        <button class="btn" onclick="showSlide(2)">2. 音乐链路</button>
+        <button class="btn" onclick="showSlide(3)">3. 记忆与话题</button>
+        <button class="btn" onclick="showSlide(4)">4. 双人循环</button>
+        <button class="btn" onclick="exitToMemory()" style="border: 1px solid #fff; color: #fff;">退出返回</button>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const fromParam = parseInt(params.get('from'), 10);
+        if (Number.isFinite(fromParam)) {
+            try { localStorage.setItem('cozeReturnSlide', fromParam); } catch (e) {}
+        }
+
+        function getReturnSlide() {
+            if (Number.isFinite(fromParam)) return fromParam;
+            const stored = parseInt(localStorage.getItem('cozeReturnSlide'), 10);
+            return Number.isFinite(stored) ? stored : 4; // 默认回到记忆页
+        }
+
+        // 自适应缩放逻辑
+        function resizeStage() {
+            const stage = document.getElementById('stage');
+            const scaleX = window.innerWidth / 1300;
+            const scaleY = window.innerHeight / 800;
+            const scale = Math.min(scaleX, scaleY, 1); // 限制最大缩放为1
+            stage.style.transform = `scale(${scale})`;
+        }
+
+        window.addEventListener('resize', resizeStage);
+        resizeStage(); // 初始化执行
+
+        // 幻灯片切换逻辑
+        function showSlide(index) {
+            document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+            document.getElementById('slide' + index).classList.add('active');
+        }
+
+        // 退出按钮：回到记忆页，并通知父/原页面
+        function exitToMemory() {
+            const target = getReturnSlide();
+            showSlide(3);
+
+            // 内嵌 iframe 情况：通知父页面
+            if (window.parent && window.parent !== window) {
+                if (typeof window.parent.exitFromCoze === 'function') {
+                    try { window.parent.exitFromCoze(target); return; } catch (e) {}
+                }
+                if (typeof window.parent.toggleCozeEmbed === 'function') {
+                    try { window.parent.toggleCozeEmbed(); return; } catch (e) {}
+                }
+            }
+
+            // 新标签页情况：通知 opener 并尝试关闭自身
+            let notified = false;
+            if (window.opener && !window.opener.closed) {
+                try {
+                    if (typeof window.opener.exitFromCoze === 'function') {
+                        window.opener.exitFromCoze(target);
+                        notified = true;
+                    } else if (typeof window.opener.updateSlide === 'function') {
+                        window.opener.updateSlide(target); // 0-based
+                        notified = true;
+                    }
+                    if (notified && typeof window.opener.focus === 'function') {
+                        window.opener.focus();
+                    }
+                } catch (e) {}
+            }
+
+            if (notified) {
+                try { window.close(); } catch (e) {}
+                return;
+            }
+
+            // 无法通知时，直接跳回 b.html 记忆页（同目录）
+            window.location.href = `b.html?slide=${target}`;
+        }
+    </script>
+</body>
+</html>
